@@ -1,0 +1,4 @@
+/sanlint
+*.test
+*.out
+.DS_Store
