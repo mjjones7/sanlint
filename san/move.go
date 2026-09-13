@@ -2,10 +2,15 @@
 // Standard Algebraic Notation, the notation chess games are recorded in
 // ("Nf3", "exd5", "O-O", "e8=Q+").
 //
-// This package validates move syntax: piece letters, disambiguation shape,
-// capture markers, and promotion rules. It does not know about a board
-// position, so it cannot tell you whether a syntactically valid move is
-// actually legal from a given position.
+// Parse and Move validate move syntax only: piece letters, disambiguation
+// shape, capture markers, and promotion rules. A syntactically valid move
+// can still be nonsense on an actual board.
+//
+// Board fills that gap: it tracks piece placement, applies parsed moves,
+// and rejects ones that don't correspond to a real piece capable of making
+// them (nothing on the source square, a blocked sliding path, a capture
+// flag that doesn't match the destination square). It does not compute
+// attacked squares, so it won't stop a king from moving into check.
 package san
 
 // Piece identifies the type of piece a move belongs to. The zero value,

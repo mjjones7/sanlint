@@ -13,11 +13,16 @@ ask it to.
 
 ## Status
 
-Early. This validates move *syntax* — legal formation, disambiguation
-shape, promotion rules — not move *legality* against an actual board
-position. Parsing "Nf3" from the starting position and parsing "Nf3" when
-there's no knight anywhere near f3 both succeed today. Board-aware legality
-checking is on the roadmap, not implemented yet.
+Early. `san.Parse` validates move *syntax* — legal formation,
+disambiguation shape, promotion rules — not move *legality*. For that
+there's `san.Board`: it tracks piece placement and `Apply`s parsed moves,
+rejecting ones with no piece able to make them, a blocked path, or a
+capture flag that doesn't match the board (including en passant). It
+doesn't yet compute attacked squares, so it won't stop a king from walking
+into check, and it trusts the move's own Check/Mate flags rather than
+deriving them.
+
+The CLI is parse-and-reprint only for now; it doesn't wire up `Board`.
 
 ## Usage
 
@@ -59,6 +64,14 @@ input line are skipped rather than treated as moves.
         // strict mode rejected it
     }
     fmt.Println(mv.String()) // "exd8=Q+"
+
+Checking a move against an actual position:
+
+    board := san.NewBoard()
+    mv, _ := san.Parse("Nf3", false)
+    if err := board.Apply(mv); err != nil {
+        // no white knight can reach f3, or some other board-level problem
+    }
 
 ## License
 
