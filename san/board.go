@@ -39,9 +39,11 @@ type square struct {
 // have a clear path, and the capture flag matches what's really on the
 // destination square (including en passant).
 //
-// It does not compute attacked squares, so it will not stop a king from
-// moving into check, and it trusts the Check/Mate flags on Move rather
-// than deriving them itself.
+// It rejects moves that would leave the mover's own king in check, including
+// castling out of, through, or into check. It does not generate the
+// opponent's legal replies, though, so it can tell a king is in check but
+// not whether that check is checkmate; it still trusts the Check/Mate flags
+// on Move rather than deriving them itself.
 type Board struct {
 	squares [8][8]square // squares[file][rank], both 0-indexed: a-h, 1-8
 	ToMove  Color
@@ -84,9 +86,12 @@ func (b *Board) PieceAt(file, rank byte) (piece Piece, color Color, occupied boo
 
 // Apply plays mv against the board for the side currently on move. On
 // success it updates piece placement, castling rights, and the en passant
-// file, then flips ToMove. On failure the board is left unchanged.
+// file, then flips ToMove. On failure the board is left unchanged, whether
+// the failure is a structural problem (no piece can make the move) or the
+// move would leave the mover's own king in check.
 func (b *Board) Apply(mv *Move) error {
 	side := b.ToMove
+	saved := *b
 
 	var err error
 	if mv.CastleKingside || mv.CastleQueenside {
@@ -95,10 +100,71 @@ func (b *Board) Apply(mv *Move) error {
 		err = b.applyMove(mv, side)
 	}
 	if err != nil {
+		*b = saved
 		return err
+	}
+	if b.InCheck(side) {
+		*b = saved
+		return fmt.Errorf("this move would leave the %s king in check", sideName(side))
 	}
 	b.ToMove = side.other()
 	return nil
+}
+
+// InCheck reports whether side's king is currently attacked by the other
+// side. It returns false if side has no king on the board, which lets tests
+// (and partially-set-up boards) work without placing one.
+func (b *Board) InCheck(side Color) bool {
+	file, rank, ok := b.kingSquare(side)
+	if !ok {
+		return false
+	}
+	return b.attacked(file, rank, side.other())
+}
+
+func (b *Board) kingSquare(side Color) (file, rank int, ok bool) {
+	for f := 0; f < 8; f++ {
+		for r := 0; r < 8; r++ {
+			sq := b.squares[f][r]
+			if sq.occupied && sq.kind == King && sq.color == side {
+				return f, r, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// attacked reports whether any piece belonging to by could move to
+// (file, rank) on its next turn, ignoring whose turn it actually is. That
+// makes it usable both for "is this king in check" and for "would this
+// square be safe for a king to stand on or pass through."
+func (b *Board) attacked(file, rank int, by Color) bool {
+	for f := 0; f < 8; f++ {
+		for r := 0; r < 8; r++ {
+			sq := b.squares[f][r]
+			if !sq.occupied || sq.color != by {
+				continue
+			}
+			if sq.kind == Pawn {
+				dir := 1
+				if by == Black {
+					dir = -1
+				}
+				if absInt(file-f) == 1 && rank-r == dir {
+					return true
+				}
+				continue
+			}
+			// Every non-pawn piece attacks a square under exactly the same
+			// rule it would use to capture on it, so pieceReaches with
+			// capture=true (unused by pieceReaches for these kinds) applies
+			// directly.
+			if b.pieceReaches(sq.kind, by, f, r, file, rank, true) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (b *Board) applyMove(mv *Move, side Color) error {
@@ -315,6 +381,18 @@ func (b *Board) applyCastle(mv *Move, side Color) error {
 		if b.squares[f][rank].occupied {
 			return fmt.Errorf("castling path is blocked")
 		}
+	}
+
+	other := side.other()
+	if b.attacked(kingFile, rank, other) {
+		return fmt.Errorf("%s cannot castle out of check", sideName(side))
+	}
+	// newRookFile is also the file the king passes over on its way to
+	// newKingFile in both directions ('f' for kingside, 'd' for
+	// queenside), so it doubles as the "does the king pass through an
+	// attacked square" check.
+	if b.attacked(newRookFile, rank, other) {
+		return fmt.Errorf("%s cannot castle through a square attacked by %s", sideName(side), sideName(other))
 	}
 
 	b.squares[kingFile][rank] = square{}

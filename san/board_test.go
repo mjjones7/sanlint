@@ -216,3 +216,65 @@ func TestApplyCastleRejectsWithoutRights(t *testing.T) {
 		t.Fatal("Apply(O-O) without castling rights succeeded, want error")
 	}
 }
+
+func TestApplyRejectsMoveThatExposesOwnKingToCheck(t *testing.T) {
+	b := emptyBoard(White)
+	b.squares[fileIndex('e')][rankIndex('1')] = square{occupied: true, kind: King, color: White}
+	b.squares[fileIndex('e')][rankIndex('4')] = square{occupied: true, kind: Rook, color: White}
+	b.squares[fileIndex('e')][rankIndex('8')] = square{occupied: true, kind: Rook, color: Black}
+
+	before := *b
+	if err := b.Apply(mustParse(t, "Rd4")); err == nil {
+		t.Fatal("Apply(Rd4) pulled the pinned rook off the e-file, exposing check, want error")
+	}
+	if *b != before {
+		t.Error("board should be unchanged after a rejected move")
+	}
+}
+
+func TestApplyRejectsKingMovingAdjacentToEnemyKing(t *testing.T) {
+	b := emptyBoard(White)
+	b.squares[fileIndex('e')][rankIndex('1')] = square{occupied: true, kind: King, color: White}
+	b.squares[fileIndex('e')][rankIndex('3')] = square{occupied: true, kind: King, color: Black}
+
+	if err := b.Apply(mustParse(t, "Ke2")); err == nil {
+		t.Fatal("Apply(Ke2) moved the white king adjacent to the black king, want error")
+	}
+}
+
+func TestInCheckDetectsCheck(t *testing.T) {
+	b := emptyBoard(White)
+	b.squares[fileIndex('e')][rankIndex('1')] = square{occupied: true, kind: King, color: White}
+	b.squares[fileIndex('a')][rankIndex('1')] = square{occupied: true, kind: Rook, color: Black}
+
+	if !b.InCheck(White) {
+		t.Fatal("InCheck(White) = false, want true with a black rook on the back rank")
+	}
+	if b.InCheck(Black) {
+		t.Fatal("InCheck(Black) = true, want false with no black king on the board")
+	}
+}
+
+func TestApplyCastleRejectsOutOfCheck(t *testing.T) {
+	b := emptyBoard(White)
+	b.squares[fileIndex('e')][rankIndex('1')] = square{occupied: true, kind: King, color: White}
+	b.squares[fileIndex('h')][rankIndex('1')] = square{occupied: true, kind: Rook, color: White}
+	b.squares[fileIndex('e')][rankIndex('8')] = square{occupied: true, kind: Rook, color: Black}
+	b.whiteKingside = true
+
+	if err := b.Apply(mustParse(t, "O-O")); err == nil {
+		t.Fatal("Apply(O-O) while in check succeeded, want error")
+	}
+}
+
+func TestApplyCastleRejectsThroughCheck(t *testing.T) {
+	b := emptyBoard(White)
+	b.squares[fileIndex('e')][rankIndex('1')] = square{occupied: true, kind: King, color: White}
+	b.squares[fileIndex('h')][rankIndex('1')] = square{occupied: true, kind: Rook, color: White}
+	b.squares[fileIndex('f')][rankIndex('8')] = square{occupied: true, kind: Rook, color: Black}
+	b.whiteKingside = true
+
+	if err := b.Apply(mustParse(t, "O-O")); err == nil {
+		t.Fatal("Apply(O-O) through an attacked square succeeded, want error")
+	}
+}

@@ -9,8 +9,8 @@
 // Board fills that gap: it tracks piece placement, applies parsed moves,
 // and rejects ones that don't correspond to a real piece capable of making
 // them (nothing on the source square, a blocked sliding path, a capture
-// flag that doesn't match the destination square). It does not compute
-// attacked squares, so it won't stop a king from moving into check.
+// flag that doesn't match the destination square, or a move that would
+// leave the mover's own king in check).
 package san
 
 // Piece identifies the type of piece a move belongs to. The zero value,
