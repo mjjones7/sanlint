@@ -16,13 +16,15 @@ ask it to.
 Early. `san.Parse` validates move *syntax* — legal formation,
 disambiguation shape, promotion rules — not move *legality*. For that
 there's `san.Board`: it tracks piece placement and `Apply`s parsed moves,
-rejecting ones with no piece able to make them, a blocked path, or a
-capture flag that doesn't match the board (including en passant). It
-doesn't yet compute attacked squares, so it won't stop a king from walking
-into check, and it trusts the move's own Check/Mate flags rather than
-deriving them.
+rejecting ones with no piece able to make them, a blocked path, a capture
+flag that doesn't match the board (including en passant), or a move that
+would leave the mover's own king in check (including castling out of,
+through, or into check). It doesn't generate the opponent's legal replies,
+though, so it trusts the move's own Check/Mate flags rather than deriving
+them, and can't yet tell check from checkmate.
 
-The CLI is parse-and-reprint only for now; it doesn't wire up `Board`.
+The CLI plays each line's moves against a fresh board in starting position
+and rejects illegal ones alongside malformed ones.
 
 ## Usage
 
@@ -54,6 +56,28 @@ canonical strict form. That's the pretty-printer half: pipe a messy PGN
 through sanlint and get consistently formatted SAN back. Move numbers
 (`1.`, `12...`) and game termination markers (`1-0`, `1/2-1/2`, `*`) in the
 input line are skipped rather than treated as moves.
+
+Each line starts from a fresh board in the standard opening position, and
+every move in it is played against that board, so a syntactically fine move
+that's illegal in context is caught too:
+
+    $ echo "e4 e5 Nf3 Nc6 Bb5 a6 Bxc6" | ./sanlint
+    e4
+    e5
+    Nf3
+    Nc6
+    Bb5
+    a6
+    Bxc6
+
+    $ echo "e4 e5 Qh5" | ./sanlint
+    e4
+    e5
+    Qh5
+
+    $ echo "e4 e4" | ./sanlint
+    e4
+    san: illegal move "e4": e4 is occupied
 
 ## As a library
 
